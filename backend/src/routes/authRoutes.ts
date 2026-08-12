@@ -7,5 +7,5 @@ export const authRoutes = Router();
 
 authRoutes.post("/signup", asyncHandler(signup));
 authRoutes.post("/login", asyncHandler(login));
-authRoutes.post("/logout", logout);
+authRoutes.post("/logout", authenticate, logout);
 authRoutes.get("/me", authenticate, asyncHandler(me));

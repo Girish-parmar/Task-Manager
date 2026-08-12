@@ -70,24 +70,38 @@ export async function allocateWorkerForTask(taskId: string, performedByUid: stri
   const chosen = pickBestCandidate(candidatesWithActiveCount, task.durationDays);
   const slack = chosen.availableCapacity - task.durationDays;
 
-  const [updatedTask] = await prisma.$transaction([
-    prisma.task.update({
-      where: { id: task.id },
+  // Re-check both preconditions (task still PENDING/unassigned, worker still
+  // has enough capacity) as conditional writes *inside* the transaction, not
+  // just via the reads above - two concurrent calls could otherwise both
+  // pass the initial reads and both mutate the same row.
+  const updatedTask = await prisma.$transaction(async (tx) => {
+    const taskUpdate = await tx.task.updateMany({
+      where: { id: task.id, status: TaskStatus.PENDING, assignedUid: null },
       data: { status: TaskStatus.ACTIVE, assignedUid: chosen.id },
-    }),
-    prisma.worker.update({
-      where: { id: chosen.id },
+    });
+    if (taskUpdate.count !== 1) {
+      throw new ConflictError("Task is already assigned or not pending");
+    }
+
+    const workerUpdate = await tx.worker.updateMany({
+      where: { id: chosen.id, availableCapacity: { gte: task.durationDays } },
       data: { availableCapacity: { decrement: task.durationDays } },
-    }),
-    prisma.auditLog.create({
+    });
+    if (workerUpdate.count !== 1) {
+      throw new ConflictError("Worker no longer has sufficient capacity");
+    }
+
+    await tx.auditLog.create({
       data: {
         taskId: task.id,
         performedByUid,
         action: "AUTO_ALLOCATED",
         metadata: { workerId: chosen.id, slack, algorithmVersion: 1 },
       },
-    }),
-  ]);
+    });
+
+    return tx.task.findUniqueOrThrow({ where: { id: task.id } });
+  });
 
   return { task: updatedTask, worker: chosen };
 }
@@ -116,24 +130,34 @@ export async function assignWorkerManually(
     throw new NotFoundError("Worker not found");
   }
 
-  const [updatedTask] = await prisma.$transaction([
-    prisma.task.update({
-      where: { id: task.id },
+  const updatedTask = await prisma.$transaction(async (tx) => {
+    const taskUpdate = await tx.task.updateMany({
+      where: { id: task.id, assignedUid: null, status: { not: TaskStatus.COMPLETED } },
       data: { status: TaskStatus.ACTIVE, assignedUid: worker.id },
-    }),
-    prisma.worker.update({
-      where: { id: worker.id },
+    });
+    if (taskUpdate.count !== 1) {
+      throw new ConflictError("Task is already assigned or completed");
+    }
+
+    const workerUpdate = await tx.worker.updateMany({
+      where: { id: worker.id, availableCapacity: { gte: task.durationDays } },
       data: { availableCapacity: { decrement: task.durationDays } },
-    }),
-    prisma.auditLog.create({
+    });
+    if (workerUpdate.count !== 1) {
+      throw new ConflictError("Worker does not have sufficient capacity for this task");
+    }
+
+    await tx.auditLog.create({
       data: {
         taskId: task.id,
         performedByUid,
         action: "MANUAL_ASSIGNED",
         metadata: { workerId: worker.id },
       },
-    }),
-  ]);
+    });
+
+    return tx.task.findUniqueOrThrow({ where: { id: task.id } });
+  });
 
   return { task: updatedTask, worker };
 }

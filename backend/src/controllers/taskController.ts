@@ -1,13 +1,15 @@
 import type { Request, Response } from "express";
 import { prisma } from "../config/prismaClient";
-import { createTaskSchema, updateTaskSchema } from "../validators/taskValidators";
+import { createTaskSchema, taskStatusQuerySchema, updateTaskSchema } from "../validators/taskValidators";
 import { NotFoundError } from "../errors/AppError";
 import { emitTaskUpdated } from "../sockets/taskEvents";
 
 export async function listTasks(req: Request, res: Response) {
-  const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
+  const statusFilter = taskStatusQuerySchema.parse(
+    typeof req.query.status === "string" ? req.query.status : undefined,
+  );
   const tasks = await prisma.task.findMany({
-    where: statusFilter ? { status: statusFilter as never } : undefined,
+    where: statusFilter ? { status: statusFilter } : undefined,
     include: { assignedWorker: { select: { id: true, name: true, email: true } } },
     orderBy: { createdAt: "desc" },
   });

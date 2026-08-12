@@ -75,7 +75,8 @@ export async function login(req: Request, res: Response) {
 }
 
 export function logout(_req: Request, res: Response) {
-  res.clearCookie("token", cookieOptions());
+  const { maxAge: _maxAge, ...clearOptions } = cookieOptions();
+  res.clearCookie("token", clearOptions);
   res.status(204).send();
 }
 

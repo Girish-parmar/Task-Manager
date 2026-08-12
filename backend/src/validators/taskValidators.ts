@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { TaskStatus } from "@prisma/client";
+
+export const taskStatusQuerySchema = z.nativeEnum(TaskStatus).optional();
 
 export const createTaskSchema = z.object({
   title: z.string().min(1).max(300),

@@ -73,4 +73,17 @@ describe("auth routes", () => {
     const res = await request(app).get("/api/auth/me");
     expect(res.status).toBe(401);
   });
+
+  it("rejects /logout without a session", async () => {
+    const res = await request(app).post("/api/auth/logout");
+    expect(res.status).toBe(401);
+  });
+
+  it("logs out an authenticated session and clears the cookie", async () => {
+    const signupRes = await request(app).post("/api/auth/signup").send(signupPayload);
+    const cookie = signupRes.headers["set-cookie"];
+
+    const res = await request(app).post("/api/auth/logout").set("Cookie", cookie);
+    expect(res.status).toBe(204);
+  });
 });

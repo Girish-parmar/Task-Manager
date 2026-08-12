@@ -36,8 +36,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
   if (loadError) return <p className="text-sm text-red-600">{loadError}</p>;
   if (!task) return <p className="text-sm text-zinc-500">Loading...</p>;
 
-  const canComplete =
-    task.status === "ACTIVE" && (task.assignedUid === worker?.id || worker?.role === "ADMIN" || worker?.role === "MANAGER");
+  const isManagerOrAdmin = worker?.role === "ADMIN" || worker?.role === "MANAGER";
+  const canComplete = task.status === "ACTIVE" && (task.assignedUid === worker?.id || isManagerOrAdmin);
 
   const handleAutoAssign = async () => {
     await autoAssign(task.id);
@@ -74,12 +74,14 @@ export default function TaskDetailPage({ params }: { params: Promise<{ taskId: s
                 >
                   Auto-assign
                 </button>
-                <button
-                  onClick={() => setShowAssign(true)}
-                  className="rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300"
-                >
-                  Assign manually
-                </button>
+                {isManagerOrAdmin && (
+                  <button
+                    onClick={() => setShowAssign(true)}
+                    className="rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300"
+                  >
+                    Assign manually
+                  </button>
+                )}
               </>
             )}
             {canComplete && (
