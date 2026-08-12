@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkerType {
+  INTERNAL
+  EXTERNAL
+}
+
+enum WorkerRole {
+  ADMIN
+  MANAGER
+  MEMBER
+}
+
+enum TaskStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+}
+
+model Worker {
+  id                String     @id @default(uuid())
+  name              String
+  email             String     @unique
+  passwordHash      String     @map("password_hash")
+  role              WorkerRole @default(MEMBER)
+  type              WorkerType
+  location          String
+  tags              String[]
+  availableCapacity Int        @map("available_capacity")
+  assignedTasks     Task[]     @relation("TaskAssignee")
+  auditLogs         AuditLog[]
+  createdAt         DateTime   @default(now()) @map("created_at")
+
+  @@index([location])
+  @@map("workers")
+}
+
+model Task {
+  id             String     @id @default(uuid())
+  title          String
+  status         TaskStatus @default(PENDING)
+  assignedUid    String?    @map("assigned_uid")
+  assignedWorker Worker?    @relation("TaskAssignee", fields: [assignedUid], references: [id])
+  requiredTags   String[]   @map("required_tags")
+  location       String?
+  durationDays   Int        @map("duration_days")
+  completedDate  DateTime?  @map("completed_date")
+
+  nextBranchId   String?    @unique @map("next_branch_id")
+  nextBranch     Task?      @relation("TaskBranch", fields: [nextBranchId], references: [id])
+  previousBranch Task?      @relation("TaskBranch")
+
+  auditLogs      AuditLog[]
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  @@index([status])
+  @@map("tasks")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  taskId         String   @map("task_id")
+  task           Task     @relation(fields: [taskId], references: [id])
+  performedByUid String   @map("performed_by_uid")
+  performedBy    Worker   @relation(fields: [performedByUid], references: [id])
+  action         String
+  metadata       Json?
+  timestamp      DateTime @default(now())
+
+  @@index([taskId])
+  @@map("audit_logs")
+}
