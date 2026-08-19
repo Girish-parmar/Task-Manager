@@ -29,10 +29,18 @@ export async function completeTaskBranch(
   }
 
   const completedTask = await prisma.$transaction(async (tx) => {
-    const updated = await tx.task.update({
-      where: { id: task.id },
+    // Re-check the ACTIVE precondition as a conditional write *inside* the
+    // transaction, not just via the read above - two concurrent completion
+    // requests for the same task would otherwise both pass the initial read
+    // and both mutate the row (double capacity credit, duplicate audit rows).
+    const taskUpdate = await tx.task.updateMany({
+      where: { id: task.id, status: TaskStatus.ACTIVE },
       data: { status: TaskStatus.COMPLETED, completedDate: new Date() },
     });
+    if (taskUpdate.count !== 1) {
+      throw new ConflictError("Task is not active");
+    }
+    const updated = await tx.task.findUniqueOrThrow({ where: { id: task.id } });
 
     // Completion frees up the days that were reserved on assignment - without
     // this, a worker's capacity only ever goes down and they eventually

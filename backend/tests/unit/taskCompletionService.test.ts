@@ -101,6 +101,30 @@ describe("taskCompletionService.completeTaskBranch", () => {
     );
   });
 
+  it("only credits capacity once when two completion requests race on the same task", async () => {
+    const worker = await createWorker({ availableCapacity: 2 });
+    const task = await createTask({ assignedUid: worker.id, durationDays: 3 });
+
+    const results = await Promise.allSettled([
+      completeTaskBranch(task.id, { id: worker.id, role: WorkerRole.MEMBER }),
+      completeTaskBranch(task.id, { id: worker.id, role: WorkerRole.MEMBER }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictError);
+
+    const refreshedWorker = await testPrisma.worker.findUniqueOrThrow({ where: { id: worker.id } });
+    expect(refreshedWorker.availableCapacity).toBe(5);
+
+    const completedRows = await testPrisma.auditLog.count({
+      where: { taskId: task.id, action: "BRANCH_COMPLETED" },
+    });
+    expect(completedRows).toBe(1);
+  });
+
   it("auto-allocates the next branch task when an eligible worker exists", async () => {
     const assignee = await createWorker();
     const nextWorker = await createWorker({ tags: ["IT"], availableCapacity: 5 });
