@@ -6,8 +6,8 @@ import { allocateWorkerForTask } from "./allocationService";
 import { NoEligibleWorkerError } from "../errors/NoEligibleWorkerError";
 
 interface CompleteResult {
-  task: Task;
-  nextBranch: Task | null;
+  task: Task & { requiredTags: string[] };
+  nextBranch: (Task & { requiredTags: string[] }) | null;
 }
 
 export async function completeTaskBranch(
@@ -40,7 +40,7 @@ export async function completeTaskBranch(
     if (taskUpdate.count !== 1) {
       throw new ConflictError("Task is not active");
     }
-    const updated = await tx.task.findUniqueOrThrow({ where: { id: task.id } });
+    const updated = await tx.task.findUniqueOrThrow({ where: { id: task.id }, include: { requiredTags: true } });
 
     // Completion frees up the days that were reserved on assignment - without
     // this, a worker's capacity only ever goes down and they eventually
@@ -62,9 +62,10 @@ export async function completeTaskBranch(
 
     return updated;
   });
+  const serializedCompleted = { ...completedTask, requiredTags: completedTask.requiredTags.map((t) => t.tag) };
 
   if (!task.nextBranchId) {
-    return { task: completedTask, nextBranch: null };
+    return { task: serializedCompleted, nextBranch: null };
   }
 
   // allocateWorkerForTask requires PENDING (its own transaction moves it to
@@ -72,7 +73,7 @@ export async function completeTaskBranch(
   // force it to ACTIVE unassigned, so it's still visible for manual pickup -
   // that fallback is itself a state change, so it gets its own transactional
   // audit row rather than mutating the row silently.
-  let nextBranch: Task;
+  let nextBranch: Task & { requiredTags: string[] };
   try {
     const { task: allocated } = await allocateWorkerForTask(task.nextBranchId, actor.id);
     nextBranch = allocated;
@@ -85,6 +86,7 @@ export async function completeTaskBranch(
       const activated = await tx.task.update({
         where: { id: nextBranchId },
         data: { status: TaskStatus.ACTIVE },
+        include: { requiredTags: true },
       });
       await tx.auditLog.create({
         data: {
@@ -94,9 +96,9 @@ export async function completeTaskBranch(
           metadata: { reason: "no_eligible_worker" },
         },
       });
-      return activated;
+      return { ...activated, requiredTags: activated.requiredTags.map((t) => t.tag) };
     });
   }
 
-  return { task: completedTask, nextBranch };
+  return { task: serializedCompleted, nextBranch };
 }

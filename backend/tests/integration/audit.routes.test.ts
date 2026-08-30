@@ -65,7 +65,7 @@ describe("audit routes", () => {
         role: WorkerRole.ADMIN,
         type: WorkerType.INTERNAL,
         location: "New York",
-        tags: [],
+        tags: { create: [].map((tag) => ({ tag })) },
         availableCapacity: 5,
       },
     });

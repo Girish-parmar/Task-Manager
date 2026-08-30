@@ -5,6 +5,7 @@ import { hashPassword, comparePassword } from "../utils/password";
 import { signToken } from "../utils/jwt";
 import { loginSchema, signupSchema } from "../validators/authValidators";
 import { ConflictError, UnauthorizedError } from "../errors/AppError";
+import { tagList } from "../utils/tags";
 
 const COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -17,7 +18,16 @@ function cookieOptions(): CookieOptions {
   };
 }
 
-function toPublicWorker(worker: { id: string; name: string; email: string; role: string; type: string; location: string; tags: string[]; availableCapacity: number }) {
+function toPublicWorker(worker: {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  type: string;
+  location: string;
+  tags: { tag: string }[];
+  availableCapacity: number;
+}) {
   return {
     id: worker.id,
     name: worker.name,
@@ -25,7 +35,7 @@ function toPublicWorker(worker: { id: string; name: string; email: string; role:
     role: worker.role,
     type: worker.type,
     location: worker.location,
-    tags: worker.tags,
+    tags: tagList(worker.tags),
     availableCapacity: worker.availableCapacity,
   };
 }
@@ -46,9 +56,10 @@ export async function signup(req: Request, res: Response) {
       passwordHash,
       type: input.type,
       location: input.location,
-      tags: input.tags,
+      tags: { create: input.tags.map((tag) => ({ tag })) },
       availableCapacity: input.availableCapacity,
     },
+    include: { tags: true },
   });
 
   const token = signToken({ id: worker.id, email: worker.email, role: worker.role });
@@ -59,7 +70,7 @@ export async function signup(req: Request, res: Response) {
 export async function login(req: Request, res: Response) {
   const input = loginSchema.parse(req.body);
 
-  const worker = await prisma.worker.findUnique({ where: { email: input.email } });
+  const worker = await prisma.worker.findUnique({ where: { email: input.email }, include: { tags: true } });
   if (!worker) {
     throw new UnauthorizedError("Invalid email or password");
   }
@@ -81,6 +92,6 @@ export function logout(_req: Request, res: Response) {
 }
 
 export async function me(req: Request, res: Response) {
-  const worker = await prisma.worker.findUniqueOrThrow({ where: { id: req.user!.id } });
+  const worker = await prisma.worker.findUniqueOrThrow({ where: { id: req.user!.id }, include: { tags: true } });
   res.json({ worker: toPublicWorker(worker) });
 }
