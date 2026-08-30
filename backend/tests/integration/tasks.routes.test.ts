@@ -33,7 +33,7 @@ async function createManagerAndGetCookie() {
       role: WorkerRole.MANAGER,
       type: WorkerType.INTERNAL,
       location: "New York",
-      tags: [],
+      tags: { create: [].map((tag) => ({ tag })) },
       availableCapacity: 5,
     },
   });
@@ -98,7 +98,7 @@ describe("task routes", () => {
           passwordHash: "hash",
           type: WorkerType.INTERNAL,
           location: "New York",
-          tags: ["IT"],
+          tags: { create: ["IT"].map((tag) => ({ tag })) },
           availableCapacity: 5,
         },
       });
@@ -139,7 +139,7 @@ describe("task routes", () => {
           passwordHash: "hash",
           type: WorkerType.INTERNAL,
           location: "New York",
-          tags: ["IT"],
+          tags: { create: ["IT"].map((tag) => ({ tag })) },
           availableCapacity: 5,
         },
       });
@@ -177,7 +177,7 @@ describe("task routes", () => {
           passwordHash: "hash",
           type: WorkerType.INTERNAL,
           location: "Nowhere",
-          tags: [],
+          tags: { create: [].map((tag) => ({ tag })) },
           availableCapacity: 5,
         },
       });
@@ -208,7 +208,7 @@ describe("task routes", () => {
           passwordHash: "hash",
           type: WorkerType.INTERNAL,
           location: "Nowhere",
-          tags: [],
+          tags: { create: [].map((tag) => ({ tag })) },
           availableCapacity: 5,
         },
       });
@@ -234,7 +234,7 @@ describe("task routes", () => {
           passwordHash: "hash",
           type: WorkerType.INTERNAL,
           location: "Nowhere",
-          tags: [],
+          tags: { create: [].map((tag) => ({ tag })) },
           availableCapacity: 1,
         },
       });

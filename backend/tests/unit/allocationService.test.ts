@@ -4,7 +4,8 @@ import { allocateWorkerForTask } from "../../src/services/allocationService";
 import { NoEligibleWorkerError } from "../../src/errors/NoEligibleWorkerError";
 import { ConflictError, NotFoundError } from "../../src/errors/AppError";
 
-async function createWorker(overrides: Partial<Parameters<typeof testPrisma.worker.create>[0]["data"]> = {}) {
+async function createWorker(overrides: { tags?: string[] } & Record<string, unknown> = {}) {
+  const { tags = [], ...rest } = overrides;
   return testPrisma.worker.create({
     data: {
       name: "Test Worker",
@@ -12,20 +13,21 @@ async function createWorker(overrides: Partial<Parameters<typeof testPrisma.work
       passwordHash: "hash",
       type: WorkerType.INTERNAL,
       location: "New York",
-      tags: [],
       availableCapacity: 10,
-      ...overrides,
+      ...rest,
+      tags: { create: tags.map((tag) => ({ tag })) },
     },
   });
 }
 
-async function createTask(overrides: Partial<Parameters<typeof testPrisma.task.create>[0]["data"]> = {}) {
+async function createTask(overrides: { requiredTags?: string[] } & Record<string, unknown> = {}) {
+  const { requiredTags = [], ...rest } = overrides;
   return testPrisma.task.create({
     data: {
       title: "Test Task",
-      requiredTags: [],
       durationDays: 3,
-      ...overrides,
+      ...rest,
+      requiredTags: { create: requiredTags.map((tag) => ({ tag })) },
     },
   });
 }

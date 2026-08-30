@@ -4,7 +4,7 @@ import { ConflictError, NotFoundError } from "../errors/AppError";
 import { NoEligibleWorkerError } from "../errors/NoEligibleWorkerError";
 
 interface AllocationResult {
-  task: Task;
+  task: Task & { requiredTags: string[] };
   worker: Worker;
 }
 
@@ -22,7 +22,7 @@ function pickBestCandidate(candidates: (Worker & { _activeCount: number })[], du
 }
 
 export async function allocateWorkerForTask(taskId: string, performedByUid: string): Promise<AllocationResult> {
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await prisma.task.findUnique({ where: { id: taskId }, include: { requiredTags: true } });
   if (!task) {
     throw new NotFoundError("Task not found");
   }
@@ -30,9 +30,13 @@ export async function allocateWorkerForTask(taskId: string, performedByUid: stri
     throw new ConflictError("Task is already assigned or not pending");
   }
 
+  const requiredTags = task.requiredTags.map((t) => t.tag);
+
   const candidates = await prisma.worker.findMany({
     where: {
-      tags: { hasEvery: task.requiredTags },
+      // MySQL has no hasEvery on an array column (tags is a join table here),
+      // so "worker has every required tag" is an AND of per-tag `some` checks.
+      ...(requiredTags.length > 0 ? { AND: requiredTags.map((tag) => ({ tags: { some: { tag } } })) } : {}),
       availableCapacity: { gte: task.durationDays },
       ...(task.location ? { location: task.location } : {}),
     },
@@ -45,7 +49,7 @@ export async function allocateWorkerForTask(taskId: string, performedByUid: stri
         performedByUid,
         action: "AUTO_ALLOCATION_FAILED",
         metadata: {
-          requiredTags: task.requiredTags,
+          requiredTags,
           location: task.location,
           durationDays: task.durationDays,
           candidateCount: 0,
@@ -100,10 +104,10 @@ export async function allocateWorkerForTask(taskId: string, performedByUid: stri
       },
     });
 
-    return tx.task.findUniqueOrThrow({ where: { id: task.id } });
+    return tx.task.findUniqueOrThrow({ where: { id: task.id }, include: { requiredTags: true } });
   });
 
-  return { task: updatedTask, worker: chosen };
+  return { task: { ...updatedTask, requiredTags: updatedTask.requiredTags.map((t) => t.tag) }, worker: chosen };
 }
 
 /**
@@ -156,8 +160,8 @@ export async function assignWorkerManually(
       },
     });
 
-    return tx.task.findUniqueOrThrow({ where: { id: task.id } });
+    return tx.task.findUniqueOrThrow({ where: { id: task.id }, include: { requiredTags: true } });
   });
 
-  return { task: updatedTask, worker };
+  return { task: { ...updatedTask, requiredTags: updatedTask.requiredTags.map((t) => t.tag) }, worker };
 }

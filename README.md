@@ -6,7 +6,7 @@ A unified workspace for internal employees and external contractors: create task
 
 - **Frontend**: Next.js (App Router) + TypeScript, Tailwind CSS, Zustand, Socket.io client
 - **Backend**: Node.js + Express + TypeScript, JWT auth, Socket.io
-- **Database**: PostgreSQL via Prisma
+- **Database**: MySQL via Prisma
 
 ## Features
 
@@ -18,12 +18,11 @@ A unified workspace for internal employees and external contractors: create task
 
 ## Getting started
 
-Requires Node 20+ and a local PostgreSQL instance.
+Requires Node 20+ and a local MySQL/MariaDB instance.
 
 ```bash
-# 1. Start Postgres, then create the databases
-createdb task_manager
-createdb task_manager_test
+# 1. Start MySQL, then create the databases
+mysql -u root -e "CREATE DATABASE task_manager; CREATE DATABASE task_manager_test;"
 
 # 2. Configure environment
 cp backend/.env.example backend/.env        # fill in DATABASE_URL / JWT_SECRET

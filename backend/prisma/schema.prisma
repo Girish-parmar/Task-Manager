@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -25,33 +25,47 @@ enum TaskStatus {
 }
 
 model Worker {
-  id                String     @id @default(uuid())
-  name              String
-  email             String     @unique
-  passwordHash      String     @map("password_hash")
-  role              WorkerRole @default(MEMBER)
+  id                String      @id @default(uuid())
+  name              String      @db.VarChar(200)
+  email             String      @unique
+  passwordHash      String      @map("password_hash")
+  role              WorkerRole  @default(MEMBER)
   type              WorkerType
   location          String
-  tags              String[]
-  availableCapacity Int        @map("available_capacity")
-  assignedTasks     Task[]     @relation("TaskAssignee")
+  tags              WorkerTag[]
+  availableCapacity Int         @map("available_capacity")
+  assignedTasks     Task[]      @relation("TaskAssignee")
   auditLogs         AuditLog[]
-  createdAt         DateTime   @default(now()) @map("created_at")
+  createdAt         DateTime    @default(now()) @map("created_at")
 
   @@index([location])
   @@map("workers")
 }
 
+// MySQL has no native array/text[] type (unlike Postgres, which this schema
+// originally targeted), so Worker.tags is a join table instead of a scalar
+// column. hasEvery-style "worker has all of these tags" matching becomes an
+// AND of relation `some` filters - see allocationService.ts.
+model WorkerTag {
+  workerId String @map("worker_id")
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  tag      String
+
+  @@id([workerId, tag])
+  @@index([tag])
+  @@map("worker_tags")
+}
+
 model Task {
-  id             String     @id @default(uuid())
-  title          String
-  status         TaskStatus @default(PENDING)
-  assignedUid    String?    @map("assigned_uid")
-  assignedWorker Worker?    @relation("TaskAssignee", fields: [assignedUid], references: [id])
-  requiredTags   String[]   @map("required_tags")
+  id             String            @id @default(uuid())
+  title          String            @db.VarChar(300)
+  status         TaskStatus        @default(PENDING)
+  assignedUid    String?           @map("assigned_uid")
+  assignedWorker Worker?           @relation("TaskAssignee", fields: [assignedUid], references: [id])
+  requiredTags   TaskRequiredTag[]
   location       String?
-  durationDays   Int        @map("duration_days")
-  completedDate  DateTime?  @map("completed_date")
+  durationDays   Int               @map("duration_days")
+  completedDate  DateTime?         @map("completed_date")
 
   nextBranchId   String?    @unique @map("next_branch_id")
   nextBranch     Task?      @relation("TaskBranch", fields: [nextBranchId], references: [id])
@@ -62,6 +76,17 @@ model Task {
 
   @@index([status])
   @@map("tasks")
+}
+
+// See WorkerTag - same join-table substitution for Task.requiredTags.
+model TaskRequiredTag {
+  taskId String @map("task_id")
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag    String
+
+  @@id([taskId, tag])
+  @@index([tag])
+  @@map("task_required_tags")
 }
 
 model AuditLog {
